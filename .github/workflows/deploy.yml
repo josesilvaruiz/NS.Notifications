@@ -1,0 +1,47 @@
+name: Deploy Notifications
+on:
+  push:
+    branches:
+      - master
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push Api
+        run: |
+          docker build -f src/1-Api/NS.Notifications.Api/Dockerfile -t torment93/ns-notifications-api:latest src
+          docker push torment93/ns-notifications-api:latest
+      - name: Build and push EmailWorker
+        run: |
+          docker build -f src/5-Workers/NS.Notifications.EmailWorker/Dockerfile -t torment93/ns-notifications-emailworker:latest src
+          docker push torment93/ns-notifications-emailworker:latest
+      - name: Build and push SmsWorker
+        run: |
+          docker build -f src/5-Workers/NS.Notifications.SmsWorker/Dockerfile -t torment93/ns-notifications-smsworker:latest src
+          docker push torment93/ns-notifications-smsworker:latest
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY_B64 }}" | base64 -d > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+      - name: Copy k8s manifests
+        run: |
+          scp -i ~/.ssh/id_ed25519 -r deploy/k8s \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/root/ns-notifications-k8s
+      - name: Deploy
+        run: |
+          ssh -i ~/.ssh/id_ed25519 \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "kubectl apply -f /root/ns-notifications-k8s && \
+             kubectl -n notifications rollout restart deployment/api deployment/email-worker deployment/sms-worker && \
+             kubectl -n notifications rollout status deployment/api && \
+             kubectl -n notifications rollout status deployment/email-worker && \
+             kubectl -n notifications rollout status deployment/sms-worker"

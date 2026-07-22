@@ -15,6 +15,13 @@ public class RabbitMqConnectionFactory
 
     public IConnection CreateConnection()
     {
-        throw new NotImplementedException();
+        var factory = new ConnectionFactory
+        {
+            HostName = _settings.Host,
+            Port = _settings.Port,
+            UserName = _settings.Username,
+            Password = _settings.Password
+        };
+        return factory.CreateConnection();
     }
 }

@@ -1,0 +1,12 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+COPY . .
+RUN dotnet restore "5-Workers/NS.Notifications.SmsWorker/NS.Notifications.SmsWorker.csproj"
+RUN dotnet publish "5-Workers/NS.Notifications.SmsWorker/NS.Notifications.SmsWorker.csproj" -c Release -o /app/publish --no-restore
+
+FROM mcr.microsoft.com/dotnet/runtime:10.0 AS final
+WORKDIR /app
+COPY --from=build /app/publish .
+
+ENTRYPOINT ["dotnet", "NS.Notifications.SmsWorker.dll"]
