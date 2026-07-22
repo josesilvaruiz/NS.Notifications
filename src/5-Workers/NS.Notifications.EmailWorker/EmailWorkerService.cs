@@ -108,7 +108,7 @@ public class EmailWorkerService : BackgroundService
         {
             from = $"{_resendSettings.FromDisplayName} <{_resendSettings.From}>",
             to = _resendSettings.RecipientList,
-            subject = $"[NS Notifications] Alerta de {notification.UserId}",
+            subject = "Alerta servidor RandomPicks",
             text = $"{notification.Message}\n\n(UserId: {notification.UserId}, generado el {notification.CreatedAt:u})"
         };
 
