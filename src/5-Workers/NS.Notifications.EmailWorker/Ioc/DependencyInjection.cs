@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using NS.Notifications.EmailWorker.Configuration;
 
 namespace NS.Notifications.EmailWorker.Ioc;
 
@@ -16,6 +17,7 @@ public static class DependencyInjection
     public static IServiceCollection AddEmailWorkerServices(this IServiceCollection services, IConfiguration config)
     {
         services.Configure<RabbitMqSettings>(config.GetSection("RabbitMq"));
+        services.Configure<SmtpSettings>(config.GetSection("Smtp"));
         services.AddHostedService<EmailWorkerService>();
         return services;
     }

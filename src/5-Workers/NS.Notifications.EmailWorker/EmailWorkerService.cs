@@ -1,6 +1,10 @@
 using System.Text;
 using System.Text.Json;
+using MailKit.Net.Smtp;
+using MailKit.Security;
+using MimeKit;
 using Microsoft.Extensions.Options;
+using NS.Notifications.EmailWorker.Configuration;
 using NS.Notifications.EmailWorker.Ioc;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -14,13 +18,15 @@ public class EmailWorkerService : BackgroundService
     private const string RoutingKey = "email";
 
     private readonly RabbitMqSettings _settings;
+    private readonly SmtpSettings _smtpSettings;
     private readonly ILogger<EmailWorkerService> _logger;
     private IConnection? _connection;
     private IModel? _channel;
 
-    public EmailWorkerService(IOptions<RabbitMqSettings> settings, ILogger<EmailWorkerService> logger)
+    public EmailWorkerService(IOptions<RabbitMqSettings> settings, IOptions<SmtpSettings> smtpSettings, ILogger<EmailWorkerService> logger)
     {
         _settings = settings.Value;
+        _smtpSettings = smtpSettings.Value;
         _logger = logger;
     }
 
@@ -51,17 +57,20 @@ public class EmailWorkerService : BackgroundService
     {
         var consumer = new EventingBasicConsumer(_channel);
 
-        consumer.Received += (_, args) =>
+        consumer.Received += async (_, args) =>
         {
             var json = Encoding.UTF8.GetString(args.Body.ToArray());
 
             try
             {
-                var notification = JsonSerializer.Deserialize<NotificationMessage>(json);
+                var notification = JsonSerializer.Deserialize<NotificationMessage>(json)
+                    ?? throw new InvalidOperationException("Notificación deserializada a null");
+
+                await SendEmailAsync(notification);
 
                 _logger.LogInformation(
-                    "Email enviado a {UserId}: {Message}",
-                    notification?.UserId, notification?.Message);
+                    "Email enviado a {Recipients} por notificación de {UserId}",
+                    string.Join(", ", _smtpSettings.RecipientList), notification.UserId);
 
                 _channel!.BasicAck(args.DeliveryTag, multiple: false);
             }
@@ -83,6 +92,26 @@ public class EmailWorkerService : BackgroundService
         _channel?.Close();
         _connection?.Close();
         await base.StopAsync(cancellationToken);
+    }
+
+    private async Task SendEmailAsync(NotificationMessage notification)
+    {
+        var email = new MimeMessage();
+        email.From.Add(new MailboxAddress(_smtpSettings.FromDisplayName, _smtpSettings.Username));
+        foreach (var recipient in _smtpSettings.RecipientList)
+            email.To.Add(MailboxAddress.Parse(recipient));
+
+        email.Subject = $"[NS Notifications] Alerta de {notification.UserId}";
+        email.Body = new TextPart("plain")
+        {
+            Text = $"{notification.Message}\n\n(UserId: {notification.UserId}, generado el {notification.CreatedAt:u})"
+        };
+
+        using var client = new SmtpClient();
+        await client.ConnectAsync(_smtpSettings.Host, _smtpSettings.Port, SecureSocketOptions.StartTls);
+        await client.AuthenticateAsync(_smtpSettings.Username, _smtpSettings.Password);
+        await client.SendAsync(email);
+        await client.DisconnectAsync(quit: true);
     }
 }
 
