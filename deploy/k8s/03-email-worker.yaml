@@ -38,6 +38,8 @@ spec:
                 secretKeyRef:
                   name: rabbitmq-credentials
                   key: password
+            - name: Resend__From
+              value: alertas@randompicks.es
             - name: Resend__ApiKey
               valueFrom:
                 secretKeyRef:
