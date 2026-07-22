@@ -63,11 +63,13 @@ spec:
               command: ["rabbitmq-diagnostics", "-q", "check_running"]
             initialDelaySeconds: 20
             periodSeconds: 10
+            timeoutSeconds: 10 # rabbitmq-diagnostics arranca su propia VM de Erlang; 1s (default) no le alcanza
           livenessProbe:
             exec:
               command: ["rabbitmq-diagnostics", "-q", "ping"]
             initialDelaySeconds: 30
             periodSeconds: 20
+            timeoutSeconds: 10
           resources:
             requests:
               cpu: 100m
