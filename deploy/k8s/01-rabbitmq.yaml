@@ -1,13 +1,11 @@
-apiVersion: v1
-kind: Secret
-metadata:
-  name: rabbitmq-credentials
-  namespace: notifications
-type: Opaque
-stringData:
-  username: admin
-  password: admin123
----
+# El Secret "rabbitmq-credentials" (keys: username, password) NO se versiona aquí
+# a propósito: el repo es público. Se crea/rota una sola vez a mano en el clúster:
+#   kubectl create secret generic rabbitmq-credentials -n notifications \
+#     --from-literal=username=admin --from-literal=password='<contraseña real>' \
+#     --dry-run=client -o yaml | kubectl apply -f -
+# Si cambias la contraseña de un RabbitMQ que ya tiene datos persistidos, además
+# hace falta `rabbitmqctl change_password admin '<contraseña real>'` dentro del pod,
+# porque RABBITMQ_DEFAULT_PASS solo se aplica en el primer arranque (Mnesia/Khepri vacío).
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
