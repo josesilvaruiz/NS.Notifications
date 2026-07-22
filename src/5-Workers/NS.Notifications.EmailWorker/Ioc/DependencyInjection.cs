@@ -17,7 +17,8 @@ public static class DependencyInjection
     public static IServiceCollection AddEmailWorkerServices(this IServiceCollection services, IConfiguration config)
     {
         services.Configure<RabbitMqSettings>(config.GetSection("RabbitMq"));
-        services.Configure<SmtpSettings>(config.GetSection("Smtp"));
+        services.Configure<ResendSettings>(config.GetSection("Resend"));
+        services.AddHttpClient();
         services.AddHostedService<EmailWorkerService>();
         return services;
     }

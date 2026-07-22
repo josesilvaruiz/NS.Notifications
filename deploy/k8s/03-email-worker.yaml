@@ -1,8 +1,7 @@
-# El Secret "smtp-credentials" (keys: username, password, recipients) NO se
-# versiona: el repo es público. Se crea/rota a mano en el clúster:
-#   kubectl create secret generic smtp-credentials -n notifications \
-#     --from-literal=username='<cuenta gmail>' \
-#     --from-literal=password='<app password de gmail>' \
+# El Secret "resend-credentials" (keys: apiKey, recipients) NO se versiona:
+# el repo es público. Se crea/rota a mano en el clúster:
+#   kubectl create secret generic resend-credentials -n notifications \
+#     --from-literal=apiKey='<api key de resend.com>' \
 #     --from-literal=recipients='dest1@ejemplo.com,dest2@ejemplo.com' \
 #     --dry-run=client -o yaml | kubectl apply -f -
 apiVersion: apps/v1
@@ -39,24 +38,15 @@ spec:
                 secretKeyRef:
                   name: rabbitmq-credentials
                   key: password
-            - name: Smtp__Host
-              value: smtp.gmail.com
-            - name: Smtp__Port
-              value: "587"
-            - name: Smtp__Username
+            - name: Resend__ApiKey
               valueFrom:
                 secretKeyRef:
-                  name: smtp-credentials
-                  key: username
-            - name: Smtp__Password
+                  name: resend-credentials
+                  key: apiKey
+            - name: Resend__Recipients
               valueFrom:
                 secretKeyRef:
-                  name: smtp-credentials
-                  key: password
-            - name: Smtp__Recipients
-              valueFrom:
-                secretKeyRef:
-                  name: smtp-credentials
+                  name: resend-credentials
                   key: recipients
           resources:
             requests:

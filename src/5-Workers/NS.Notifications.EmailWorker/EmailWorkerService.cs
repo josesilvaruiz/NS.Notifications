@@ -1,8 +1,7 @@
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using MailKit.Net.Smtp;
-using MailKit.Security;
-using MimeKit;
 using Microsoft.Extensions.Options;
 using NS.Notifications.EmailWorker.Configuration;
 using NS.Notifications.EmailWorker.Ioc;
@@ -18,15 +17,21 @@ public class EmailWorkerService : BackgroundService
     private const string RoutingKey = "email";
 
     private readonly RabbitMqSettings _settings;
-    private readonly SmtpSettings _smtpSettings;
+    private readonly ResendSettings _resendSettings;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<EmailWorkerService> _logger;
     private IConnection? _connection;
     private IModel? _channel;
 
-    public EmailWorkerService(IOptions<RabbitMqSettings> settings, IOptions<SmtpSettings> smtpSettings, ILogger<EmailWorkerService> logger)
+    public EmailWorkerService(
+        IOptions<RabbitMqSettings> settings,
+        IOptions<ResendSettings> resendSettings,
+        IHttpClientFactory httpClientFactory,
+        ILogger<EmailWorkerService> logger)
     {
         _settings = settings.Value;
-        _smtpSettings = smtpSettings.Value;
+        _resendSettings = resendSettings.Value;
+        _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
 
@@ -70,7 +75,7 @@ public class EmailWorkerService : BackgroundService
 
                 _logger.LogInformation(
                     "Email enviado a {Recipients} por notificación de {UserId}",
-                    string.Join(", ", _smtpSettings.RecipientList), notification.UserId);
+                    string.Join(", ", _resendSettings.RecipientList), notification.UserId);
 
                 _channel!.BasicAck(args.DeliveryTag, multiple: false);
             }
@@ -96,22 +101,22 @@ public class EmailWorkerService : BackgroundService
 
     private async Task SendEmailAsync(NotificationMessage notification)
     {
-        var email = new MimeMessage();
-        email.From.Add(new MailboxAddress(_smtpSettings.FromDisplayName, _smtpSettings.Username));
-        foreach (var recipient in _smtpSettings.RecipientList)
-            email.To.Add(MailboxAddress.Parse(recipient));
+        var client = _httpClientFactory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _resendSettings.ApiKey);
 
-        email.Subject = $"[NS Notifications] Alerta de {notification.UserId}";
-        email.Body = new TextPart("plain")
+        var payload = new
         {
-            Text = $"{notification.Message}\n\n(UserId: {notification.UserId}, generado el {notification.CreatedAt:u})"
+            from = $"{_resendSettings.FromDisplayName} <{_resendSettings.From}>",
+            to = _resendSettings.RecipientList,
+            subject = $"[NS Notifications] Alerta de {notification.UserId}",
+            text = $"{notification.Message}\n\n(UserId: {notification.UserId}, generado el {notification.CreatedAt:u})"
         };
 
-        using var client = new SmtpClient();
-        await client.ConnectAsync(_smtpSettings.Host, _smtpSettings.Port, SecureSocketOptions.StartTls);
-        await client.AuthenticateAsync(_smtpSettings.Username, _smtpSettings.Password);
-        await client.SendAsync(email);
-        await client.DisconnectAsync(quit: true);
+        var response = await client.PostAsJsonAsync("https://api.resend.com/emails", payload);
+        var body = await response.Content.ReadAsStringAsync();
+
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Resend respondió {(int)response.StatusCode}: {body}");
     }
 }
 
