@@ -35,6 +35,12 @@ jobs:
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
       - name: Copy k8s manifests
         run: |
+          # Se borra primero: si el directorio remoto ya existe, "scp -r" lo anida
+          # dentro (.../ns-notifications-k8s/k8s/...) en vez de sobrescribirlo, y el
+          # kubectl apply de abajo (no recursivo) se queda aplicando manifiestos viejos.
+          ssh -i ~/.ssh/id_ed25519 \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "rm -rf /root/ns-notifications-k8s"
           scp -i ~/.ssh/id_ed25519 -r deploy/k8s \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/root/ns-notifications-k8s
       - name: Deploy
